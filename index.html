@@ -387,16 +387,19 @@
       }
 
       // ---------------------------------------------------------------
-      // EYE STRAIN: 6 items taken from the CVS-Q (Segui et al., 2015),
+      // EYE STRAIN: items taken from the CVS-Q (Segui et al., 2015),
       // scale 1 (not at all) to 5 (very strongly).
       // ---------------------------------------------------------------
       const EYESTRAIN_ITEMS = [
-        "Burning",
-        "Itching",
-        "Dryness",
-        "Blurred vision",
-        "Difficulty focusing on near objects",
-        "Headache",
+        "Burning", // CVS-Q item 1
+        "Itching", // CVS-Q item 2
+        "Excessive blinking", // CVS-Q item 5
+        "Heavy eyelids", // CVS-Q item 8
+        "Dryness", // CVS-Q item 9
+        "Blurred vision", // CVS-Q item 10
+        "Double vision", // CVS-Q item 11
+        "Difficulty focusing on near objects", // CVS-Q item 12
+        "Headache", // CVS-Q item 16
       ];
 
       // ---------- Comprehension questions ----------
@@ -566,18 +569,18 @@
           "n_correct",
           "n_errors",
           "error_rate",
-          "eye1",
-          "eye2",
-          "eye3",
-          "eye4",
-          "eye5",
-          "eye6",
-          "eye_mean",
-          "timestamp",
-          "screen_width",
-          "screen_height",
-          "user_agent",
-        ];
+        ].concat(
+          EYESTRAIN_ITEMS.map(function (item, i) {
+            return "eye" + (i + 1);
+          }), // eye1, eye2, ...
+          [
+            "eye_mean",
+            "timestamp",
+            "screen_width",
+            "screen_height",
+            "user_agent",
+          ],
+        );
         const timestamp = new Date().toISOString();
         const rows = state.results.map(function (r, i) {
           return [
