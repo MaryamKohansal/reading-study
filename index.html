@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reading study</title>
+    <style>
+      /* Light and dark mode: exactly inverted colors, so the contrast is identical. */
+      :root {
+        --bg: #f0f0f0;
+        --fg: #1a1a1a;
+      }
+      body.dark {
+        --bg: #1a1a1a;
+        --fg: #f0f0f0;
+      }
+
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.6;
+      }
+
+      /* Each "page" is a .screen. Only the one with .active is visible. */
+      .screen {
+        display: none;
+        max-width: 700px;
+        margin: 0 auto;
+        padding: 40px 20px;
+      }
+      .screen.active {
+        display: block;
+      }
+
+      h1,
+      h2 {
+        margin-top: 0;
+      }
+
+      input[type="text"] {
+        font-size: 1rem;
+        padding: 8px 10px;
+        border: 1px solid #999;
+        border-radius: 4px;
+        width: 220px;
+      }
+
+      button {
+        font-size: 1rem;
+        padding: 10px 24px;
+        margin-top: 20px;
+        border: none;
+        border-radius: 4px;
+        background: #2563eb;
+        color: #ffffff;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #1d4ed8;
+      }
+
+      .error {
+        color: #b91c1c;
+        margin-top: 10px;
+        min-height: 1.2em;
+      }
+
+      fieldset {
+        border: 1px solid var(--fg);
+        border-radius: 6px;
+        margin: 0 0 18px 0;
+        padding: 12px 16px;
+      }
+      legend {
+        font-weight: 600;
+        padding: 0 6px;
+      }
+      label.option {
+        display: block;
+        padding: 4px 0;
+        cursor: pointer;
+      }
+
+      .likert {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+      .likert label {
+        cursor: pointer;
+        text-align: center;
+      }
+      .likert-ends {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        opacity: 0.8;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 1. Welcome -->
+    <div id="screen-welcome" class="screen active">
+      <h1>Reading study</h1>
+      <p>
+        Thank you for taking part. You will read two short texts. After each
+        text you will answer a few questions about its content and about how
+        your eyes feel. Please read at your normal pace.
+      </p>
+      <p>The study takes about 10 minutes. Your data are stored anonymously.</p>
+      <p>
+        <strong>Please note:</strong> use a laptop or desktop computer (not a
+        smartphone), set your screen brightness to a medium level, switch off
+        night mode, blue-light filters and dark-mode browser extensions, and do
+        not refresh the page during the study.
+      </p>
+
+      <div id="id-box">
+        <label for="participant-id">Participant no.:</label>
+        <input type="text" id="participant-id" autocomplete="off" />
+      </div>
+      <div id="welcome-error" class="error"></div>
+
+      <button id="btn-start">Start</button>
+    </div>
+
+    <!-- 2. Reading -->
+    <div id="screen-reading" class="screen">
+      <h2>Reading</h2>
+      <p id="reading-text"></p>
+      <button id="btn-finished-reading">Finished reading</button>
+    </div>
+
+    <!-- 3. Questions -->
+    <div id="screen-questions" class="screen">
+      <h2>Questions about the text</h2>
+      <p>Please answer all questions. The text is no longer visible.</p>
+      <div id="questions-container"></div>
+      <div id="questions-error" class="error"></div>
+      <button id="btn-questions-next">Next</button>
+    </div>
+
+    <!-- 4. Eye strain -->
+    <div id="screen-eyestrain" class="screen">
+      <h2>Your eyes</h2>
+      <p>
+        How strongly did you experience the following symptoms while reading?
+      </p>
+      <div id="eyestrain-container"></div>
+      <div id="eyestrain-error" class="error"></div>
+      <button id="btn-eyestrain-next">Next</button>
+    </div>
+
+    <!-- 5. Break -->
+    <div id="screen-break" class="screen">
+      <h2>Short break</h2>
+      <p>
+        Please look away from the screen for a moment. The next text will appear
+        automatically in <strong id="break-countdown">15</strong> seconds.
+      </p>
+    </div>
+
+    <!-- 6. End -->
+    <div id="screen-end" class="screen">
+      <h2>Thank you!</h2>
+      <p>
+        You have completed the study. Your data have been downloaded as a file
+        (.csv).
+      </p>
+      <p>
+        <strong>Please send this file to: mako1004@stud.hs-kl.de</strong><br />
+        (You will find it in your "Downloads" folder. The file name starts with
+        study_ followed by your ID.)
+      </p>
+      <button id="btn-download">Download file again</button>
+    </div>
+
+    <script>
+      // ---------------------------------------------------------------
+      // MATERIAL: two texts (about 180 words each), 4 questions per text.
+      // "correct" is the index (0-3) of the correct answer.
+      // ---------------------------------------------------------------
+      const PASSAGES = [
+        {
+          id: "bees",
+          text:
+            "Honeybees live in colonies that can contain up to 50,000 individuals in summer. " +
+            "Only a single queen lays the eggs, and she can lay up to 2,000 of them in one day. " +
+            "The worker bees take over all other tasks: they clean the combs, feed the larvae, guard the entrance and collect nectar. " +
+            "To do so, they fly up to three kilometers away. " +
+            "In summer, worker bees live for only about six weeks. " +
+            "Back in the hive, they turn the nectar into honey. " +
+            "They add an enzyme from their own bodies and fan their wings so that water evaporates. " +
+            "Only when the honey contains about 18 percent water do they seal the cell with a wax cap. " +
+            "To make one kilogram of honey, the bees visit several million flowers. " +
+            "A single bee produces only about one twelfth of a teaspoon of honey in her lifetime. " +
+            "Beekeepers remove part of the honey in summer but leave enough for the winter. " +
+            "In winter the honey feeds the colony, because the bees then form a winter cluster and keep each other warm.",
+          questions: [
+            {
+              q: "How many eggs can the queen lay in one day?",
+              options: [
+                "up to 200",
+                "up to 2,000",
+                "up to 20,000",
+                "up to 50,000",
+              ],
+              correct: 1,
+            },
+            {
+              q: "How far do the worker bees fly to search for nectar?",
+              options: [
+                "up to 300 meters",
+                "up to one kilometer",
+                "up to three kilometers",
+                "up to ten kilometers",
+              ],
+              correct: 2,
+            },
+            {
+              q: "How much water does the honey contain before the cell is sealed?",
+              options: [
+                "about 8 percent",
+                "about 18 percent",
+                "about 38 percent",
+                "about 58 percent",
+              ],
+              correct: 1,
+            },
+            {
+              q: "What is the honey used for in winter?",
+              options: [
+                "as food for the colony",
+                "to build new combs",
+                "to protect against parasites",
+                "to raise new queens",
+              ],
+              correct: 0,
+            },
+          ],
+        },
+        {
+          id: "rainbow",
+          text:
+            "A rainbow forms when sunlight strikes raindrops. " +
+            "To see one, the sun must be behind the observer and the rain must be falling in front of them. " +
+            "The light enters the drop and is bent as it does so. " +
+            "At the back of the drop it is reflected, and on leaving it is bent a second time. " +
+            "Because each color is bent by a different amount, white sunlight splits into its spectral colors. " +
+            "The sequence of colors runs from red through yellow and green to violet. " +
+            "Red light is deflected the least, so red always lies on the outside of the primary bow. " +
+            "The primary bow appears at an angle of about 42 degrees to the line of sight. " +
+            "If the sun stands higher than 42 degrees, no rainbow can be seen from the ground. " +
+            "Every observer sees their own rainbow, because it forms on different drops. " +
+            "Sometimes a fainter secondary bow with reversed colors appears above the primary bow, because the light is reflected twice inside the drop. " +
+            "From an airplane, a rainbow sometimes appears as a complete circle.",
+          questions: [
+            {
+              q: "At what angle to the line of sight does the primary bow appear?",
+              options: [
+                "about 24 degrees",
+                "about 42 degrees",
+                "about 62 degrees",
+                "about 82 degrees",
+              ],
+              correct: 1,
+            },
+            {
+              q: "Which color lies on the outside of the primary bow?",
+              options: ["Violet", "Green", "Red", "Blue"],
+              correct: 2,
+            },
+            {
+              q: "How many times is the light reflected inside the drop for the secondary bow?",
+              options: ["once", "twice", "three times", "not at all"],
+              correct: 1,
+            },
+            {
+              q: "Where does a rainbow sometimes appear as a complete circle?",
+              options: [
+                "from an airplane",
+                "over the sea",
+                "in fog",
+                "at night",
+              ],
+              correct: 0,
+            },
+          ],
+        },
+      ];
+
+      // Helper to check text length (use it in the browser console).
+      function countWords(text) {
+        return text.trim().split(/\s+/).length;
+      }
+
+      // ---------------------------------------------------------------
+      // COUNTERBALANCING: 4 groups = 2 mode orders x 2 text orders
+      //   Group 1: Light -> Dark, bees first
+      //   Group 2: Dark -> Light, bees first
+      //   Group 3: Light -> Dark, rainbow first
+      //   Group 4: Dark -> Light, rainbow first
+      // The group follows from the participant number (1, 2, 3, 4, 5, ...).
+      // ---------------------------------------------------------------
+      const MODE_ORDERS = [
+        ["light", "dark"],
+        ["dark", "light"],
+      ];
+      const PASSAGE_ORDERS = [
+        [0, 1],
+        [1, 0],
+      ]; // Index in PASSAGES
+
+      function assignGroup(participantNumber) {
+        const g = (participantNumber - 1) % 4; // 0, 1, 2, 3
+        const modes = MODE_ORDERS[g % 2];
+        const passages = PASSAGE_ORDERS[Math.floor(g / 2)];
+        return {
+          group: g + 1,
+          conditions: [
+            { mode: modes[0], passageIndex: passages[0] },
+            { mode: modes[1], passageIndex: passages[1] },
+          ],
+        };
+      }
+
+      // All data of one run are collected here.
+      const state = {
+        participantId: null,
+        participantNumber: null,
+        group: null,
+        conditions: [], // condition 1 and 2: { mode, passageIndex }
+        currentCondition: 0,
+        readingStart: null, // time at which the text appeared
+        results: [], // per condition: mode, text, reading time, words per minute
+      };
+
+      // Sets the mode: "light" or "dark".
+      function applyMode(mode) {
+        document.body.classList.toggle("dark", mode === "dark");
+      }
+
+      // Starts a condition (0 = first, 1 = second): set mode, show text, start timer.
+      function startCondition(index) {
+        state.currentCondition = index;
+        const cond = state.conditions[index];
+        applyMode(cond.mode);
+        document.getElementById("reading-text").textContent =
+          PASSAGES[cond.passageIndex].text;
+        showScreen("screen-reading");
+        state.readingStart = performance.now(); // timer runs from the moment the text is visible
+      }
+
+      // "Finished reading": stop the timer and compute words per minute.
+      document
+        .getElementById("btn-finished-reading")
+        .addEventListener("click", function () {
+          const seconds = (performance.now() - state.readingStart) / 1000;
+          const cond = state.conditions[state.currentCondition];
+          const passage = PASSAGES[cond.passageIndex];
+          const words = countWords(passage.text);
+          state.results[state.currentCondition] = {
+            mode: cond.mode,
+            passageId: passage.id,
+            readingTimeSec: seconds,
+            wpm: (words / seconds) * 60,
+          };
+          console.log("Result:", state.results[state.currentCondition]); // for testing only
+          renderQuestions();
+          showScreen("screen-questions");
+        });
+
+      // Shows exactly one page, all others are hidden.
+      function showScreen(id) {
+        document.querySelectorAll(".screen").forEach(function (s) {
+          s.classList.remove("active");
+        });
+        document.getElementById(id).classList.add("active");
+      }
+
+      // ---------------------------------------------------------------
+      // EYE STRAIN: 6 items taken from the CVS-Q (Segui et al., 2015),
+      // scale 1 (not at all) to 5 (very strongly).
+      // ---------------------------------------------------------------
+      const EYESTRAIN_ITEMS = [
+        "Burning",
+        "Itching",
+        "Dryness",
+        "Blurred vision",
+        "Difficulty focusing on near objects",
+        "Headache",
+      ];
+
+      // ---------- Comprehension questions ----------
+      function renderQuestions() {
+        const passage =
+          PASSAGES[state.conditions[state.currentCondition].passageIndex];
+        const box = document.getElementById("questions-container");
+        box.innerHTML = "";
+        document.getElementById("questions-error").textContent = "";
+
+        passage.questions.forEach(function (q, i) {
+          const fs = document.createElement("fieldset");
+          const lg = document.createElement("legend");
+          lg.textContent = i + 1 + ". " + q.q;
+          fs.appendChild(lg);
+          q.options.forEach(function (opt, j) {
+            const label = document.createElement("label");
+            label.className = "option";
+            const input = document.createElement("input");
+            input.type = "radio";
+            input.name = "q" + i;
+            input.value = j;
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(" " + opt));
+            fs.appendChild(label);
+          });
+          box.appendChild(fs);
+        });
+      }
+
+      document
+        .getElementById("btn-questions-next")
+        .addEventListener("click", function () {
+          const passage =
+            PASSAGES[state.conditions[state.currentCondition].passageIndex];
+          const answers = [];
+          for (let i = 0; i < passage.questions.length; i++) {
+            const checked = document.querySelector(
+              'input[name="q' + i + '"]:checked',
+            );
+            if (!checked) {
+              document.getElementById("questions-error").textContent =
+                "Please answer all questions.";
+              return;
+            }
+            answers.push(parseInt(checked.value, 10));
+          }
+          let correct = 0;
+          answers.forEach(function (a, i) {
+            if (a === passage.questions[i].correct) correct++;
+          });
+          const r = state.results[state.currentCondition];
+          r.nQuestions = answers.length;
+          r.nCorrect = correct;
+          r.nErrors = answers.length - correct;
+          r.errorRate = r.nErrors / answers.length;
+          renderEyestrain();
+          showScreen("screen-eyestrain");
+        });
+
+      // ---------- Eye strain ----------
+      function renderEyestrain() {
+        const box = document.getElementById("eyestrain-container");
+        box.innerHTML = "";
+        document.getElementById("eyestrain-error").textContent = "";
+
+        EYESTRAIN_ITEMS.forEach(function (item, i) {
+          const fs = document.createElement("fieldset");
+          const lg = document.createElement("legend");
+          lg.textContent = item;
+          fs.appendChild(lg);
+
+          const row = document.createElement("div");
+          row.className = "likert";
+          for (let v = 1; v <= 5; v++) {
+            const label = document.createElement("label");
+            const input = document.createElement("input");
+            input.type = "radio";
+            input.name = "eye" + i;
+            input.value = v;
+            label.appendChild(input);
+            label.appendChild(document.createElement("br"));
+            label.appendChild(document.createTextNode(String(v)));
+            row.appendChild(label);
+          }
+          fs.appendChild(row);
+
+          const ends = document.createElement("div");
+          ends.className = "likert-ends";
+          ends.innerHTML = "<span>not at all</span><span>very strongly</span>";
+          fs.appendChild(ends);
+
+          box.appendChild(fs);
+        });
+      }
+
+      document
+        .getElementById("btn-eyestrain-next")
+        .addEventListener("click", function () {
+          const values = [];
+          for (let i = 0; i < EYESTRAIN_ITEMS.length; i++) {
+            const checked = document.querySelector(
+              'input[name="eye' + i + '"]:checked',
+            );
+            if (!checked) {
+              document.getElementById("eyestrain-error").textContent =
+                "Please answer all items.";
+              return;
+            }
+            values.push(parseInt(checked.value, 10));
+          }
+          const r = state.results[state.currentCondition];
+          r.eyestrain = values;
+          r.eyestrainMean =
+            values.reduce(function (a, b) {
+              return a + b;
+            }, 0) / values.length;
+
+          if (state.currentCondition === 0) {
+            startBreak();
+          } else {
+            finishStudy();
+          }
+        });
+
+      // ---------- Break (15 seconds), then condition 2 starts automatically ----------
+      function startBreak() {
+        applyMode("light"); // neutral display during the break
+        showScreen("screen-break");
+        let remaining = 15;
+        const el = document.getElementById("break-countdown");
+        el.textContent = remaining;
+        const timer = setInterval(function () {
+          remaining--;
+          el.textContent = remaining;
+          if (remaining <= 0) {
+            clearInterval(timer);
+            startCondition(1);
+          }
+        }, 1000);
+      }
+
+      // ---------- End, CSV ----------
+      function finishStudy() {
+        applyMode("light");
+        showScreen("screen-end");
+        downloadCsv();
+      }
+
+      function csvCell(v) {
+        return '"' + String(v).replace(/"/g, '""') + '"';
+      }
+
+      // One row per condition (2 rows per participant).
+      function buildCsv() {
+        const header = [
+          "participant_id",
+          "participant_number",
+          "group",
+          "condition_order",
+          "mode",
+          "passage",
+          "words",
+          "reading_time_sec",
+          "wpm",
+          "n_questions",
+          "n_correct",
+          "n_errors",
+          "error_rate",
+          "eye1",
+          "eye2",
+          "eye3",
+          "eye4",
+          "eye5",
+          "eye6",
+          "eye_mean",
+          "timestamp",
+          "screen_width",
+          "screen_height",
+          "user_agent",
+        ];
+        const timestamp = new Date().toISOString();
+        const rows = state.results.map(function (r, i) {
+          return [
+            state.participantId,
+            state.participantNumber,
+            state.group,
+            i + 1,
+            r.mode,
+            r.passageId,
+            countWords(
+              PASSAGES.find(function (p) {
+                return p.id === r.passageId;
+              }).text,
+            ),
+            r.readingTimeSec.toFixed(2),
+            r.wpm.toFixed(1),
+            r.nQuestions,
+            r.nCorrect,
+            r.nErrors,
+            r.errorRate.toFixed(3),
+          ].concat(r.eyestrain, [
+            r.eyestrainMean.toFixed(3),
+            timestamp,
+            screen.width,
+            screen.height,
+            navigator.userAgent,
+          ]);
+        });
+        return [header]
+          .concat(rows)
+          .map(function (row) {
+            return row.map(csvCell).join(",");
+          })
+          .join("\n");
+      }
+
+      function downloadCsv() {
+        const blob = new Blob([buildCsv()], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download =
+          "study_" +
+          String(state.participantId).replace(/[^a-zA-Z0-9]/g, "") +
+          ".csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      document
+        .getElementById("btn-download")
+        .addEventListener("click", downloadCsv);
+
+      // ---------------------------------------------------------------
+      // GROUP ASSIGNMENT
+      //   AUTO_ASSIGN = true : The program automatically creates a random
+      //                        participant ID and a random group (1-4).
+      //                        Useful if you do not want to hand out numbers.
+      //   AUTO_ASSIGN = false: The participant number (1, 2, 3, ...) is typed in
+      //                        and determines the group in rotation.
+      // ---------------------------------------------------------------
+      const AUTO_ASSIGN = true;
+
+      if (AUTO_ASSIGN) {
+        document.getElementById("id-box").style.display = "none";
+      }
+
+      // Start button: assign the group, then go to the reading page.
+      document
+        .getElementById("btn-start")
+        .addEventListener("click", function () {
+          let value, number, groupSource;
+
+          if (AUTO_ASSIGN) {
+            number = Math.floor(10000 + Math.random() * 90000); // random 5-digit ID
+            value = "R" + number;
+            groupSource = Math.floor(Math.random() * 4) + 1; // random group 1-4
+          } else {
+            value = document.getElementById("participant-id").value.trim();
+            number = parseInt(value.replace(/\D/g, ""), 10); // digits only, e.g. "P07" -> 7
+            if (isNaN(number) || number < 1) {
+              document.getElementById("welcome-error").textContent =
+                "Please enter a participant number (e.g. 1 or P01).";
+              return;
+            }
+            groupSource = number;
+          }
+
+          const assignment = assignGroup(groupSource);
+          state.participantId = value;
+          state.participantNumber = number;
+          state.group = assignment.group;
+          state.conditions = assignment.conditions;
+          state.currentCondition = 0;
+          console.log("State after start:", state); // for testing only
+
+          startCondition(0);
+        });
+    </script>
+  </body>
+</html>
